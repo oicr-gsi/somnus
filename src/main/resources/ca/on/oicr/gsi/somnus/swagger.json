@@ -1,0 +1,117 @@
+{
+  "components": {},
+  "info": {
+    "contact": {
+      "email": "andre.masella@oicr.on.ca"
+    },
+    "description": "This API is implemented by [Somnus](https://github.com/oicr-gsi/somnus).",
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    },
+    "title": "Somnus",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/create": {
+      "post": {
+        "description": "Create an inhibition",
+        "operationId": "createInhibition",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "creator": {
+                    "description": "the human who did this",
+                    "type": "string"
+                  },
+                  "environment": {
+                    "description": "The environment that will be affected (e.g, production, development)",
+                    "type": "string"
+                  },
+                  "reason": {
+                    "description": "Oh, god, why!!!",
+                    "type": "string"
+                  },
+                  "services": {
+                    "description": "the service names to inhibit",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "ttl": {
+                    "description": "seconds this inhibition should last",
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "expirationTime": {
+                      "description": "the time this inhibition will be ignored in seconds since the UNIX epoch",
+                      "type": "integer"
+                    },
+                    "id": {
+                      "description": "the id of this inhibition",
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Inhibition created"
+          }
+        },
+        "summary": "Create a new inhibition to stop services",
+        "tags": [
+          "manage"
+        ]
+      }
+    },
+    "/awake": {
+      "post": {
+        "description": "Stop an inhibition early so that service can be used again.",
+        "operationId": "awakeInhibition",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Inhibition was removed"
+          },
+          "404": {
+            "description": "No inhibition with that ID"
+          }
+        },
+        "summary": "Remove an inhibition before it expires.",
+        "tags": [
+          "manage"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "description": "Manage",
+      "name": "manage"
+    }
+  ]
+}

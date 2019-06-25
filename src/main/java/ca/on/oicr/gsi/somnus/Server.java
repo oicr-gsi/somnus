@@ -1,0 +1,336 @@
+package ca.on.oicr.gsi.somnus;
+
+import ca.on.oicr.gsi.prometheus.LatencyHistogram;
+import ca.on.oicr.gsi.status.*;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
+import io.prometheus.client.CollectorRegistry;
+import io.prometheus.client.Gauge;
+import io.prometheus.client.exporter.common.TextFormat;
+import java.io.*;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.time.Instant;
+import java.util.Deque;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.*;
+import java.util.function.Consumer;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamWriter;
+
+@SuppressWarnings("restriction")
+public final class Server implements ServerConfig {
+  public static void main(String[] args) throws IOException {
+    final Server server = new Server(Integer.parseInt(args[0]));
+    readFile(args[1], server.knownEnvironments::add);
+    readFile(args[2], server.knownServices::add);
+    server.server.start();
+  }
+
+  private static void readFile(String filename, Consumer<? super String> consumer)
+      throws IOException {
+    try (final Stream<String> lines = Files.lines(Paths.get(filename), StandardCharsets.UTF_8)) {
+      lines
+          .filter(Pattern.compile("^[ \t]*(#.*)$").asPredicate().negate())
+          .map(String::trim)
+          .forEach(consumer);
+    }
+  }
+
+  private static final LatencyHistogram responseTime =
+      new LatencyHistogram(
+          "somnus_http_request_time", "The time to respond to an HTTP request.", "url");
+  private static final Gauge stopGauge =
+      Gauge.build("somnus_inhibited", "Whether a service should be inhibited.")
+          .labelNames("scope", "target_environment")
+          .register();
+  private final Deque<Inhibition> inhibitions = new ConcurrentLinkedDeque<>();
+  private final Set<String> knownEnvironments = ConcurrentHashMap.newKeySet();
+  private final Set<String> knownServices = ConcurrentHashMap.newKeySet();
+  private Instant lastUpdate;
+  private final ObjectMapper mapper = new ObjectMapper();
+  private final HttpServer server;
+
+  public Server(int port) throws IOException {
+    server = HttpServer.create(new InetSocketAddress(port), 0);
+    add(
+        "/",
+        t -> {
+          t.getResponseHeaders().set("Content-type", "text/html; charset=utf-8");
+          t.sendResponseHeaders(200, 0);
+          try (OutputStream os = t.getResponseBody()) {
+            new StatusPage(this) {
+              final Instant now = Instant.now();
+
+              @Override
+              protected void emitCore(SectionRenderer renderer) {
+                renderer.lineSpan("Last Updated", lastUpdate);
+                renderer.line("Known Services", Integer.toString(knownServices.size()));
+              }
+
+              @Override
+              public Stream<ConfigurationSection> sections() {
+                return inhibitions
+                    .stream()
+                    .map(
+                        i ->
+                            new ConfigurationSection(String.format("Inhibition %d", i.id())) {
+                              @Override
+                              public void emit(SectionRenderer sectionRenderer) {
+                                sectionRenderer.line("Creator", i.creator());
+                                sectionRenderer.line("Created", i.created());
+                                sectionRenderer.line("Environment", i.environment());
+                                if (i.awoken()) {
+                                  sectionRenderer.line("Status", "Awoken (Manual)");
+
+                                } else {
+                                  if (i.expirationTime().isAfter(now)) {
+                                    sectionRenderer.line("Status", "Sleeping");
+                                    sectionRenderer.lineSpan("Expires", i.expirationTime());
+                                    sectionRenderer.link(
+                                        "", String.format("awakeui?%d", i.id()), "Wake up");
+                                  } else {
+                                    sectionRenderer.line("Status", "Awoken (Expired)");
+                                  }
+                                }
+                                sectionRenderer.line("Reason", i.reason());
+                                for (final String service : i) {
+                                  sectionRenderer.line("Service", service);
+                                }
+                              }
+                            });
+              }
+            }.renderPage(os);
+          }
+        });
+    add(
+        "/add",
+        t -> {
+          t.getResponseHeaders().set("Content-type", "text/html; charset=utf-8");
+          t.sendResponseHeaders(200, 0);
+          try (OutputStream os = t.getResponseBody()) {
+            new BasePage(this, false) {
+
+              @Override
+              public Stream<Header> headers() {
+                try {
+                  return Stream.of(
+                      Header.jsModule(
+                          String.format(
+                              "import form from './ui.js'; form(document.getElementById('form'), %s, %s);",
+                              mapper.writeValueAsString(knownEnvironments),
+                              mapper.writeValueAsString(knownServices))));
+                } catch (JsonProcessingException e) {
+                  e.printStackTrace();
+                  return Stream.of(
+                      Header.jsModule(
+                          "document.getElementById('form').innerText = 'Internal error';"));
+                }
+              }
+
+              @Override
+              protected void renderContent(XMLStreamWriter writer) throws XMLStreamException {
+                writer.writeStartElement("div");
+                writer.writeAttribute("id", "form");
+                writer.writeEndElement();
+              }
+            }.renderPage(os);
+          }
+        });
+
+    add(
+        "/metrics",
+        t -> {
+          t.getResponseHeaders().set("Content-type", TextFormat.CONTENT_TYPE_004);
+          t.sendResponseHeaders(200, 0);
+          try (final OutputStream os = t.getResponseBody();
+              Writer writer = new PrintWriter(os)) {
+            TextFormat.write004(writer, CollectorRegistry.defaultRegistry.metricFamilySamples());
+          }
+        });
+
+    add(
+        "/create",
+        t -> {
+          final CreateRequest query;
+          try {
+            query = mapper.readValue(t.getRequestBody(), CreateRequest.class);
+          } catch (final Exception e) {
+            e.printStackTrace();
+            t.sendResponseHeaders(400, 0);
+            try (final OutputStream os = t.getResponseBody()) {
+              os.write("Bad JSON".getBytes(StandardCharsets.UTF_8));
+            }
+            return;
+          }
+          if (query.getCreator() == null
+              || query.getCreator().isEmpty()
+              || query.getEnvironment() == null
+              || query.getEnvironment().isEmpty()
+              || query.getServices() == null
+              || query.getServices().isEmpty()) {
+            t.sendResponseHeaders(400, 0);
+            try (final OutputStream os = t.getResponseBody()) {
+              os.write("Creator and services are required".getBytes(StandardCharsets.UTF_8));
+            }
+            return;
+          }
+          knownServices.addAll(query.getServices());
+          knownEnvironments.add(query.getEnvironment());
+          final Inhibition inhibition =
+              new Inhibition(
+                  new TreeSet<>(query.getServices()),
+                  query.getEnvironment(),
+                  Instant.now().plusSeconds(query.getTtl()),
+                  query.getCreator(),
+                  query.getReason());
+          inhibitions.add(inhibition);
+          refreshPrometheus();
+          final CreateResponse response = new CreateResponse();
+          response.setId(inhibition.id());
+          response.setExpirationTime(inhibition.expirationTime().getEpochSecond());
+          t.getResponseHeaders().set("Content-type", "application/json");
+          t.sendResponseHeaders(200, 0);
+          try (final OutputStream os = t.getResponseBody()) {
+            os.write(mapper.writeValueAsString(response).getBytes(StandardCharsets.UTF_8));
+          }
+        });
+    add(
+        "/awake",
+        t -> {
+          try {
+            final int id = mapper.readValue(t.getRequestBody(), int.class);
+            for (final Inhibition inhibition : inhibitions) {
+              if (inhibition.id() != id) continue;
+              inhibition.awake();
+              t.sendResponseHeaders(200, 0);
+              try (OutputStream os = t.getResponseBody()) {
+                os.write("OK".getBytes(StandardCharsets.UTF_8));
+              }
+              refreshPrometheus();
+              return;
+            }
+
+            t.sendResponseHeaders(404, 0);
+            try (final OutputStream os = t.getResponseBody()) {
+              os.write("Not found".getBytes(StandardCharsets.UTF_8));
+            }
+          } catch (final Exception e) {
+            e.printStackTrace();
+            t.sendResponseHeaders(400, 0);
+            try (OutputStream os = t.getResponseBody()) {
+              os.write("Bad JSON".getBytes(StandardCharsets.UTF_8));
+            }
+          }
+        });
+    add(
+        "/awakeui",
+        t -> {
+          boolean deleted = false;
+          int id = Integer.parseInt(t.getRequestURI().getQuery());
+          for (final Inhibition inhibition : inhibitions) {
+            if (inhibition.id() != id) continue;
+            inhibition.awake();
+            deleted = true;
+            refreshPrometheus();
+            break;
+          }
+          t.getResponseHeaders().set("Location", "/");
+          t.sendResponseHeaders(302, 0);
+          try (OutputStream os = t.getResponseBody()) {
+            os.write((deleted ? "Deleted" : "Not found").getBytes(StandardCharsets.UTF_8));
+          }
+        });
+
+    add("ui.js", "text/javascript");
+    add("swagger.json", "application/json");
+    add("api-docs/favicon-16x16.png", "image/png");
+    add("api-docs/favicon-32x32.png", "image/png");
+    add("api-docs/index.html", "text/html");
+    add("api-docs/oauth2-redirect.html", "text/html");
+    add("api-docs/swagger-ui-bundle.js", "text/javascript");
+    add("api-docs/swagger-ui-standalone-preset.js", "text/javascript");
+    add("api-docs/swagger-ui.css", "text/css");
+    add("api-docs/swagger-ui.js", "text/javascript");
+
+    System.out.println("Starting server...");
+    final ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
+    executorService.scheduleWithFixedDelay(this::refreshPrometheus, 10, 10, TimeUnit.SECONDS);
+  }
+
+  /** Add a new service endpoint with Prometheus monitoring */
+  private void add(String url, HttpHandler handler) {
+    server.createContext(
+        url,
+        t -> {
+          try (AutoCloseable timer = responseTime.start(url)) {
+            handler.handle(t);
+          } catch (final Throwable e) {
+            e.printStackTrace();
+            throw new IOException(e);
+          }
+        });
+  }
+
+  /** Add a file backed by a class resource */
+  private void add(String url, String type) {
+    server.createContext(
+        "/" + url,
+        t -> {
+          t.getResponseHeaders().set("Content-type", type);
+          t.sendResponseHeaders(200, 0);
+          final byte[] b = new byte[1024];
+          try (OutputStream output = t.getResponseBody();
+              InputStream input = getClass().getResourceAsStream(url)) {
+            int count;
+            while ((count = input.read(b)) > 0) {
+              output.write(b, 0, count);
+            }
+          } catch (final IOException e) {
+            e.printStackTrace();
+          }
+        });
+  }
+
+  @Override
+  public Stream<Header> headers() {
+    return Stream.empty();
+  }
+
+  @Override
+  public String name() {
+    return "Somnus";
+  }
+
+  @Override
+  public Stream<NavigationMenu> navigation() {
+    return Stream.of(NavigationMenu.item("add", "Add"));
+  }
+
+  private void refreshPrometheus() {
+    lastUpdate = Instant.now();
+    for (final String environment : knownEnvironments)
+      for (final String service : knownServices) {
+        stopGauge
+            .labels(service, environment)
+            .set(
+                inhibitions
+                        .stream()
+                        .anyMatch(
+                            i ->
+                                i.environment().equals(environment)
+                                    && i.expirationTime().isAfter(lastUpdate)
+                                    && !i.awoken()
+                                    && i.test(service))
+                    ? 1.0
+                    : 0.0);
+      }
+  }
+}

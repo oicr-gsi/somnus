@@ -1,0 +1,8 @@
+groups:
+- name: somnus.rules
+  rules:
+  - alert: AutoInhibit
+    expr: label_replace(somnus_inhibited > 0, "environment", "$1", "target_environment", "(.*)")
+    annotations:
+      description: This service was manually inhibit by Sonmus. The reason should be on the Somnus console.
+      summary: Service manually inhibited
