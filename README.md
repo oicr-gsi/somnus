@@ -11,7 +11,7 @@ firing.
 
 Somnus is an application to allow manually inhibiting applications using this
 mechanism. It provides a user interface and REST API to create inhibitions to
-block services. This works is conceptually similar to Alert Manager silences.
+block services. This works conceptually like Alert Manager silences.
 
 To run a Somnus instance, create a file with all of the `environment` labels
 and a file with the name of all the `scope` labels you want users to be able to

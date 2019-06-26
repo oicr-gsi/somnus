@@ -30,10 +30,6 @@ class Inhibition implements Predicate<String>, Iterable<String> {
     this.reason = reason;
   }
 
-  public void awake() {
-    awoken = true;
-  }
-
   public boolean awoken() {
     return awoken;
   }
@@ -70,5 +66,9 @@ class Inhibition implements Predicate<String>, Iterable<String> {
   @Override
   public boolean test(String s) {
     return services.contains(s);
+  }
+
+  public void wake() {
+    awoken = true;
   }
 }

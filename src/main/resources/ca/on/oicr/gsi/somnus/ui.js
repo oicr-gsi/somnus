@@ -83,7 +83,7 @@ export default function(form, environments, services) {
     }
     window.localStorage.setItem("creator", request.creator);
     window.localStorage.setItem("environment", request.environment);
-    fetch("/create", {
+    fetch("/api/inhibitions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -97,8 +97,30 @@ export default function(form, environments, services) {
             response.expirationTime * 1000
           )}.`
         );
-        window.location = "/";
+        window.location = `/view#inhibition${response.id}`;
       })
       .catch(error => alert(error));
   });
+}
+
+export function wake(id) {
+  fetch("/api/inhibitions", {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(id)
+  })
+    .then(response => {
+      if (response.status == 204) {
+        window.location = "/view";
+      } else {
+        return response.json().then(response => {
+          if (response.hasOwnProperty("error")) {
+            alert(response.error);
+          }
+        });
+      }
+    })
+    .catch(error => alert(error));
 }

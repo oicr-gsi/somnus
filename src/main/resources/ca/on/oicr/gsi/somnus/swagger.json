@@ -9,12 +9,36 @@
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
     },
-    "title": "Somnus",
-    "version": "1.0.0"
+    "title": "Somnus"
   },
   "openapi": "3.0.0",
   "paths": {
-    "/create": {
+    "/api/inhibitions": {
+      "delete": {
+        "description": "Stop an inhibition early so that service can be used again.",
+        "operationId": "awakeInhibition",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Inhibition was removed"
+          },
+          "404": {
+            "description": "No inhibition with that ID"
+          }
+        },
+        "summary": "Remove an inhibition before it expires.",
+        "tags": [
+          "manage"
+        ]
+      },
       "post": {
         "description": "Create an inhibition",
         "operationId": "createInhibition",
@@ -53,7 +77,7 @@
           }
         },
         "responses": {
-          "200": {
+          "201": {
             "content": {
               "application/json": {
                 "schema": {
@@ -75,33 +99,6 @@
           }
         },
         "summary": "Create a new inhibition to stop services",
-        "tags": [
-          "manage"
-        ]
-      }
-    },
-    "/awake": {
-      "post": {
-        "description": "Stop an inhibition early so that service can be used again.",
-        "operationId": "awakeInhibition",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "integer"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Inhibition was removed"
-          },
-          "404": {
-            "description": "No inhibition with that ID"
-          }
-        },
-        "summary": "Remove an inhibition before it expires.",
         "tags": [
           "manage"
         ]
