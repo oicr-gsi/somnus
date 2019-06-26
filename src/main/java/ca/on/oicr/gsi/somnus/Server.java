@@ -4,6 +4,7 @@ import ca.on.oicr.gsi.prometheus.LatencyHistogram;
 import ca.on.oicr.gsi.status.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import io.prometheus.client.CollectorRegistry;
@@ -27,6 +28,7 @@ import javax.xml.stream.XMLStreamWriter;
 
 @SuppressWarnings("restriction")
 public final class Server implements ServerConfig {
+
   public static void main(String[] args) throws IOException {
     final Server server = new Server(Integer.parseInt(args[0]));
     readFile(args[1], server.knownEnvironments::add);
@@ -67,7 +69,6 @@ public final class Server implements ServerConfig {
           t.sendResponseHeaders(200, 0);
           try (OutputStream os = t.getResponseBody()) {
             new StatusPage(this) {
-              final Instant now = Instant.now();
 
               @Override
               protected void emitCore(SectionRenderer renderer) {
@@ -77,35 +78,42 @@ public final class Server implements ServerConfig {
 
               @Override
               public Stream<ConfigurationSection> sections() {
-                return inhibitions
-                    .stream()
-                    .map(
-                        i ->
-                            new ConfigurationSection(String.format("Inhibition %d", i.id())) {
-                              @Override
-                              public void emit(SectionRenderer sectionRenderer) {
-                                sectionRenderer.line("Creator", i.creator());
-                                sectionRenderer.line("Created", i.created());
-                                sectionRenderer.line("Environment", i.environment());
-                                if (i.awoken()) {
-                                  sectionRenderer.line("Status", "Awoken (Manual)");
+                return Stream.empty();
+              }
+            }.renderPage(os);
+          }
+        });
+    add(
+        "/view",
+        t -> {
+          t.getResponseHeaders().set("Content-type", "text/html; charset=utf-8");
+          t.sendResponseHeaders(200, 0);
+          try (OutputStream os = t.getResponseBody()) {
+            new BasePage(this, false) {
 
-                                } else {
-                                  if (i.expirationTime().isAfter(now)) {
-                                    sectionRenderer.line("Status", "Sleeping");
-                                    sectionRenderer.lineSpan("Expires", i.expirationTime());
-                                    sectionRenderer.link(
-                                        "", String.format("awakeui?%d", i.id()), "Wake up");
-                                  } else {
-                                    sectionRenderer.line("Status", "Awoken (Expired)");
-                                  }
-                                }
-                                sectionRenderer.line("Reason", i.reason());
-                                for (final String service : i) {
-                                  sectionRenderer.line("Service", service);
-                                }
-                              }
-                            });
+              @Override
+              public Stream<Header> headers() {
+                return Stream.of(
+                    Header.jsModule("import {wake} from './ui.js'; window.wake = wake;"),
+                    Header.css(
+                        ".sleeping { background-color: #EAF5F7; } .button { color: #fff; background-color: #04AA9D; margin: 0.5em; padding: 0.2em; border: 1px solid #78C3CD; box-shadow: 0.1em 0.1em 5px 0px rgba(0,0,0,0.1); transition: all 0.3s ease 0s; cursor: pointer; display: inline-block; }"));
+              }
+
+              @Override
+              protected void renderContent(XMLStreamWriter writer) throws XMLStreamException {
+                final Instant now = Instant.now();
+                inhibitions
+                    .stream()
+                    .map(i -> new InhibitionDescription(i, now))
+                    .sorted()
+                    .forEach(
+                        description -> {
+                          try {
+                            description.emit(writer);
+                          } catch (XMLStreamException e) {
+                            throw new RuntimeException(e);
+                          }
+                        });
               }
             }.renderPage(os);
           }
@@ -157,95 +165,81 @@ public final class Server implements ServerConfig {
         });
 
     add(
-        "/create",
+        "/api/inhibitions",
         t -> {
-          final CreateRequest query;
-          try {
-            query = mapper.readValue(t.getRequestBody(), CreateRequest.class);
-          } catch (final Exception e) {
-            e.printStackTrace();
-            t.sendResponseHeaders(400, 0);
-            try (final OutputStream os = t.getResponseBody()) {
-              os.write("Bad JSON".getBytes(StandardCharsets.UTF_8));
-            }
-            return;
-          }
-          if (query.getCreator() == null
-              || query.getCreator().isEmpty()
-              || query.getEnvironment() == null
-              || query.getEnvironment().isEmpty()
-              || query.getServices() == null
-              || query.getServices().isEmpty()) {
-            t.sendResponseHeaders(400, 0);
-            try (final OutputStream os = t.getResponseBody()) {
-              os.write("Creator and services are required".getBytes(StandardCharsets.UTF_8));
-            }
-            return;
-          }
-          knownServices.addAll(query.getServices());
-          knownEnvironments.add(query.getEnvironment());
-          final Inhibition inhibition =
-              new Inhibition(
-                  new TreeSet<>(query.getServices()),
-                  query.getEnvironment(),
-                  Instant.now().plusSeconds(query.getTtl()),
-                  query.getCreator(),
-                  query.getReason());
-          inhibitions.add(inhibition);
-          refreshPrometheus();
-          final CreateResponse response = new CreateResponse();
-          response.setId(inhibition.id());
-          response.setExpirationTime(inhibition.expirationTime().getEpochSecond());
-          t.getResponseHeaders().set("Content-type", "application/json");
-          t.sendResponseHeaders(200, 0);
-          try (final OutputStream os = t.getResponseBody()) {
-            os.write(mapper.writeValueAsString(response).getBytes(StandardCharsets.UTF_8));
-          }
-        });
-    add(
-        "/awake",
-        t -> {
-          try {
-            final int id = mapper.readValue(t.getRequestBody(), int.class);
-            for (final Inhibition inhibition : inhibitions) {
-              if (inhibition.id() != id) continue;
-              inhibition.awake();
-              t.sendResponseHeaders(200, 0);
-              try (OutputStream os = t.getResponseBody()) {
-                os.write("OK".getBytes(StandardCharsets.UTF_8));
+          switch (t.getRequestMethod()) {
+            case "POST":
+              try {
+                final CreateRequest query =
+                    mapper.readValue(t.getRequestBody(), CreateRequest.class);
+                if (query.getCreator() == null
+                    || query.getCreator().isEmpty()
+                    || query.getEnvironment() == null
+                    || query.getEnvironment().isEmpty()
+                    || query.getServices() == null
+                    || query.getServices().isEmpty()) {
+                  t.sendResponseHeaders(400, 0);
+                  try (final OutputStream os = t.getResponseBody()) {
+                    os.write("Creator and services are required".getBytes(StandardCharsets.UTF_8));
+                  }
+                  return;
+                }
+                knownServices.addAll(query.getServices());
+                knownEnvironments.add(query.getEnvironment());
+                final Inhibition inhibition =
+                    new Inhibition(
+                        new TreeSet<>(query.getServices()),
+                        query.getEnvironment(),
+                        Instant.now().plusSeconds(query.getTtl()),
+                        query.getCreator(),
+                        query.getReason());
+                inhibitions.add(inhibition);
+                refreshPrometheus();
+                final CreateResponse response = new CreateResponse();
+                response.setId(inhibition.id());
+                response.setExpirationTime(inhibition.expirationTime().getEpochSecond());
+                t.getResponseHeaders().set("Content-type", "application/json");
+                t.sendResponseHeaders(201, 0);
+                try (final OutputStream os = t.getResponseBody()) {
+                  os.write(mapper.writeValueAsString(response).getBytes(StandardCharsets.UTF_8));
+                }
+              } catch (final Exception e) {
+                e.printStackTrace();
+                t.sendResponseHeaders(400, 0);
+                try (final OutputStream os = t.getResponseBody()) {
+                  final ObjectNode result = mapper.createObjectNode();
+                  result.put("error", e.getMessage());
+                  os.write(mapper.writeValueAsBytes(result));
+                }
+                return;
               }
-              refreshPrometheus();
-              return;
-            }
 
-            t.sendResponseHeaders(404, 0);
-            try (final OutputStream os = t.getResponseBody()) {
-              os.write("Not found".getBytes(StandardCharsets.UTF_8));
-            }
-          } catch (final Exception e) {
-            e.printStackTrace();
-            t.sendResponseHeaders(400, 0);
-            try (OutputStream os = t.getResponseBody()) {
-              os.write("Bad JSON".getBytes(StandardCharsets.UTF_8));
-            }
-          }
-        });
-    add(
-        "/awakeui",
-        t -> {
-          boolean deleted = false;
-          int id = Integer.parseInt(t.getRequestURI().getQuery());
-          for (final Inhibition inhibition : inhibitions) {
-            if (inhibition.id() != id) continue;
-            inhibition.awake();
-            deleted = true;
-            refreshPrometheus();
-            break;
-          }
-          t.getResponseHeaders().set("Location", "/");
-          t.sendResponseHeaders(302, 0);
-          try (OutputStream os = t.getResponseBody()) {
-            os.write((deleted ? "Deleted" : "Not found").getBytes(StandardCharsets.UTF_8));
+              break;
+            case "DELETE":
+              try {
+                final int id = mapper.readValue(t.getRequestBody(), int.class);
+                for (final Inhibition inhibition : inhibitions) {
+                  if (inhibition.id() != id) continue;
+                  inhibition.wake();
+                  t.sendResponseHeaders(204, -1);
+                  t.getResponseBody().close();
+                  refreshPrometheus();
+                  return;
+                }
+
+                t.sendResponseHeaders(404, 0);
+                try (final OutputStream os = t.getResponseBody()) {
+                  os.write("{\"error\":\"No such inhibition\"}".getBytes(StandardCharsets.UTF_8));
+                }
+              } catch (final Exception e) {
+                e.printStackTrace();
+                t.sendResponseHeaders(400, 0);
+                try (OutputStream os = t.getResponseBody()) {
+                  final ObjectNode result = mapper.createObjectNode();
+                  result.put("error", e.getMessage());
+                  os.write(mapper.writeValueAsBytes(result));
+                }
+              }
           }
         });
 
@@ -311,7 +305,7 @@ public final class Server implements ServerConfig {
 
   @Override
   public Stream<NavigationMenu> navigation() {
-    return Stream.of(NavigationMenu.item("add", "Add"));
+    return Stream.of(NavigationMenu.item("view", "View"), NavigationMenu.item("add", "Add"));
   }
 
   private void refreshPrometheus() {
