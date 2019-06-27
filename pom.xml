@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
     <groupId>ca.on.oicr.gsi</groupId>
     <artifactId>somnus</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.0.1</version>
   <packaging>jar</packaging>
   <name>Inhibition Server</name>
   <url>https://github.com/oicr-gsi/somnus</url>
@@ -77,6 +77,14 @@
         <version>0.0.26</version>
     </dependency>
   </dependencies>
+  <distributionManagement>
+    <repository>
+      <id>deploy.artifacts.oicr</id>
+      <name>OICR - GSO Releases</name>
+      <url>https://artifacts.oicr.on.ca/artifactory/gsi-release</url>
+    </repository>
+    <downloadUrl>https://artifacts.oicr.on.ca/artifactory/gsi-release</downloadUrl>
+  </distributionManagement>
   <build>
     <finalName>somnus</finalName>
     <plugins>
