@@ -34,7 +34,7 @@ export default function(form, environments, services) {
   form.appendChild(document.createElement("BR"));
 
   const environment = document.createElement("SELECT");
-  for (const name of environments) {
+  for (const name of environments.sort()) {
     const option = document.createElement("OPTION");
     option.text = name;
     option.value = name;
@@ -46,7 +46,7 @@ export default function(form, environments, services) {
   form.appendChild(document.createElement("BR"));
 
   const serviceSelection = new Map();
-  for (const service of services) {
+  for (const service of services.sort()) {
     const check = document.createElement("INPUT");
     check.type = "checkbox";
     const label = document.createElement("LABEL");
