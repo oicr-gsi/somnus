@@ -56,6 +56,12 @@ export default function(form, environments, services) {
     form.appendChild(document.createElement("BR"));
     serviceSelection.set(service, check);
   }
+  form.appendChild(document.createTextNode("Other: "));
+  const custom = document.createElement("INPUT");
+  custom.type = "text";
+  form.appendChild(custom);
+  form.appendChild(document.createTextNode(" (space separated if multiple)"));
+  form.appendChild(document.createElement("BR"));
 
   const button = document.createElement("INPUT");
   button.type = "button";
@@ -68,7 +74,8 @@ export default function(form, environments, services) {
       reason: reason.value.trim(),
       services: Array.from(serviceSelection.entries())
         .filter(([name, checkbox]) => checkbox.checked)
-        .map(([name, checkbox]) => name),
+        .map(([name, checkbox]) => name)
+        .concat(custom.value.split(/\s+/).filter(x => !!x)),
       ttl: ttl.valueAsNumber * parseInt(units.value)
     };
     if (
