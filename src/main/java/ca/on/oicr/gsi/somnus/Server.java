@@ -4,6 +4,7 @@ import ca.on.oicr.gsi.prometheus.LatencyHistogram;
 import ca.on.oicr.gsi.status.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -239,6 +240,18 @@ public final class Server implements ServerConfig {
                   result.put("error", e.getMessage());
                   os.write(mapper.writeValueAsBytes(result));
                 }
+              }
+
+              break;
+            case "GET":
+              ArrayNode inhibitionDump = mapper.createArrayNode();
+              for (Inhibition i : inhibitions) {
+                inhibitionDump.add(mapper.convertValue(i, ObjectNode.class));
+              }
+              t.getResponseHeaders().set("Content-type", "application/json");
+              t.sendResponseHeaders(200, 0);
+              try (final OutputStream os = t.getResponseBody()) {
+                os.write(mapper.writeValueAsBytes(inhibitionDump));
               }
           }
         });
