@@ -3,9 +3,11 @@ package ca.on.oicr.gsi.somnus;
 import ca.on.oicr.gsi.prometheus.LatencyHistogram;
 import ca.on.oicr.gsi.status.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import io.prometheus.client.CollectorRegistry;
@@ -17,7 +19,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.*;
@@ -62,6 +66,7 @@ public final class Server implements ServerConfig {
   private final HttpServer server;
 
   public Server(int port) throws IOException {
+    mapper.registerModule(new JavaTimeModule());
     server = HttpServer.create(new InetSocketAddress(port), 0);
     add(
         "/",
@@ -263,6 +268,40 @@ public final class Server implements ServerConfig {
                   os.write(mapper.writeValueAsBytes(result));
                 }
               }
+          }
+        });
+
+    add(
+        "/api/load",
+        t -> {
+          if (t.getRequestMethod().equals("POST")) {
+            try {
+              ArrayList<Inhibition> inhibitionsToRecreate =
+                  mapper.readValue(t.getRequestBody(), new TypeReference<List<Inhibition>>() {});
+              Instant now = Instant.now();
+              for (Inhibition i : inhibitionsToRecreate) {
+                // Only keep Inhibitions which haven't expired during downtime
+                if (i.expirationTime().isAfter(now)) {
+                  inhibitions.add(i);
+                  knownEnvironments.add(i.environment());
+                  knownServices.addAll(i.services());
+                }
+              }
+              refreshPrometheus();
+              t.getResponseHeaders().set("Content-type", "application/json");
+              t.sendResponseHeaders(201, 0);
+              try (final OutputStream os = t.getResponseBody()) {
+                os.write(mapper.writeValueAsString(inhibitions).getBytes(StandardCharsets.UTF_8));
+              }
+            } catch (final Exception e) {
+              e.printStackTrace();
+              t.sendResponseHeaders(400, 0);
+              try (OutputStream os = t.getResponseBody()) {
+                final ObjectNode result = mapper.createObjectNode();
+                result.put("error", e.getMessage());
+                os.write(mapper.writeValueAsBytes(result));
+              }
+            }
           }
         });
 
