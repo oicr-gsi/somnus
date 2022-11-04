@@ -4,32 +4,16 @@
       "Inhibition": {
         "properties": {
           "created": {
-            "type": "object",
-            "properties": {
-              "nano": {
-                "type": "number"
-              },
-              "epochSecond": {
-                "type": "number"
-              }
-            }
+            "type": "number"
           },
           "creator": {
-            "type": "number"
+            "type": "string"
           },
           "environment": {
             "type": "string"
           },
           "expirationTime": {
-            "type": "object",
-            "properties": {
-              "nano": {
-                "type": "number"
-              },
-              "epochSecond": {
-                "type": "number"
-              }
-            }
+            "type": "number"
           },
           "reason": {
             "type": "string"
@@ -162,6 +146,26 @@
                 "schema": {
                   "$ref": "#/components/schemas/Inhibition"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/load": {
+      "post": {
+        "summary": "Load inhibitions from JSON",
+        "description": "Restore inhibitions from a previous JSON dump.",
+        "tags": [
+          "manage"
+        ],
+        "operationId": "loadInhibitions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "type": "array",
+              "schema": {
+                "$ref": "#/components/schemas/Inhibition"
               }
             }
           }
