@@ -55,7 +55,6 @@ class Inhibition implements Predicate<String>, Iterable<String> {
     return expirationTime;
   }
 
-  @JsonGetter("id")
   public int id() {
     return id;
   }
