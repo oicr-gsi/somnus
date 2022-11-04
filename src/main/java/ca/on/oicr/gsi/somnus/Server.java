@@ -244,14 +244,24 @@ public final class Server implements ServerConfig {
 
               break;
             case "GET":
-              ArrayNode inhibitionDump = mapper.createArrayNode();
-              for (Inhibition i : inhibitions) {
-                inhibitionDump.add(mapper.convertValue(i, ObjectNode.class));
-              }
-              t.getResponseHeaders().set("Content-type", "application/json");
-              t.sendResponseHeaders(200, 0);
-              try (final OutputStream os = t.getResponseBody()) {
-                os.write(mapper.writeValueAsBytes(inhibitionDump));
+              try {
+                ArrayNode inhibitionDump = mapper.createArrayNode();
+                for (Inhibition i : inhibitions) {
+                  inhibitionDump.add(mapper.convertValue(i, ObjectNode.class));
+                }
+                t.getResponseHeaders().set("Content-type", "application/json");
+                t.sendResponseHeaders(200, 0);
+                try (final OutputStream os = t.getResponseBody()) {
+                  os.write(mapper.writeValueAsBytes(inhibitionDump));
+                }
+              } catch (final Exception e) {
+                e.printStackTrace();
+                t.sendResponseHeaders(400, 0);
+                try (OutputStream os = t.getResponseBody()) {
+                  final ObjectNode result = mapper.createObjectNode();
+                  result.put("error", e.getMessage());
+                  os.write(mapper.writeValueAsBytes(result));
+                }
               }
           }
         });
