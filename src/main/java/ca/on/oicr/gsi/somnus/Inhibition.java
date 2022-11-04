@@ -1,5 +1,6 @@
 package ca.on.oicr.gsi.somnus;
 
+import com.fasterxml.jackson.annotation.JsonGetter;
 import java.time.Instant;
 import java.util.Iterator;
 import java.util.Set;
@@ -34,22 +35,27 @@ class Inhibition implements Predicate<String>, Iterable<String> {
     return awoken;
   }
 
+  @JsonGetter("created")
   public Instant created() {
     return created;
   }
 
+  @JsonGetter("creator")
   public String creator() {
     return creator;
   }
 
+  @JsonGetter("environment")
   public String environment() {
     return environment;
   }
 
+  @JsonGetter("expirationTime")
   public Instant expirationTime() {
     return expirationTime;
   }
 
+  @JsonGetter("id")
   public int id() {
     return id;
   }
@@ -59,8 +65,14 @@ class Inhibition implements Predicate<String>, Iterable<String> {
     return services.iterator();
   }
 
+  @JsonGetter("reason")
   public String reason() {
     return reason;
+  }
+
+  @JsonGetter("services")
+  private Set<String> services() {
+    return services;
   }
 
   @Override

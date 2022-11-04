@@ -1,8 +1,55 @@
 {
-  "components": {},
+  "components": {
+    "schemas": {
+      "Inhibition": {
+        "properties": {
+          "created": {
+            "type": "object",
+            "properties": {
+              "nano": {
+                "type": "number"
+              },
+              "epochSecond": {
+                "type": "number"
+              }
+            }
+          },
+          "creator": {
+            "type": "number"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "expirationTime": {
+            "type": "object",
+            "properties": {
+              "nano": {
+                "type": "number"
+              },
+              "epochSecond": {
+                "type": "number"
+              }
+            }
+          },
+          "id": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
   "info": {
     "contact": {
-      "email": "andre.masella@oicr.on.ca"
+      "url": "https://github.com/oicr-gsi/somnus/issues/new"
     },
     "description": "This API is implemented by [Somnus](https://github.com/oicr-gsi/somnus).",
     "license": {
@@ -102,6 +149,26 @@
         "tags": [
           "manage"
         ]
+      },
+      "get": {
+        "summary": "Dump all inhibitions to JSON",
+        "description": "Get a JSON array of all inhibitions currently in memory in order to recreate on reboot.",
+        "tags": [
+          "manage"
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON array of JSON representations of inhibitions.",
+            "content": {
+              "application/json": {
+                "type": "array",
+                "schema": {
+                  "$ref": "#/components/schemas/Inhibition"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
