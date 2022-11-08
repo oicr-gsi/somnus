@@ -251,8 +251,10 @@ public final class Server implements ServerConfig {
             case "GET":
               try {
                 ArrayNode inhibitionDump = mapper.createArrayNode();
+                Instant now = Instant.now();
                 for (Inhibition i : inhibitions) {
-                  inhibitionDump.add(mapper.convertValue(i, ObjectNode.class));
+                  if (i.expirationTime().isAfter(now) && !i.awoken())
+                    inhibitionDump.add(mapper.convertValue(i, ObjectNode.class));
                 }
                 t.getResponseHeaders().set("Content-type", "application/json");
                 t.sendResponseHeaders(200, 0);
