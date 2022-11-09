@@ -1,7 +1,13 @@
 package ca.on.oicr.gsi.somnus;
 
 import ca.on.oicr.gsi.prometheus.LatencyHistogram;
-import ca.on.oicr.gsi.status.*;
+import ca.on.oicr.gsi.status.BasePage;
+import ca.on.oicr.gsi.status.ConfigurationSection;
+import ca.on.oicr.gsi.status.Header;
+import ca.on.oicr.gsi.status.NavigationMenu;
+import ca.on.oicr.gsi.status.SectionRenderer;
+import ca.on.oicr.gsi.status.ServerConfig;
+import ca.on.oicr.gsi.status.StatusPage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,18 +19,27 @@ import com.sun.net.httpserver.HttpServer;
 import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.Gauge;
 import io.prometheus.client.exporter.common.TextFormat;
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.Writer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -178,12 +193,8 @@ public final class Server implements ServerConfig {
               try {
                 final CreateRequest query =
                     mapper.readValue(t.getRequestBody(), CreateRequest.class);
-                if (query.getCreator() == null
-                    || query.getCreator().isEmpty()
-                    || query.getEnvironment() == null
-                    || query.getEnvironment().isEmpty()
-                    || query.getServices() == null
-                    || query.getServices().isEmpty()) {
+                if (validSubmission(
+                    query.getCreator(), query.getEnvironment(), query.getServices())) {
                   t.sendResponseHeaders(400, 0);
                   try (final OutputStream os = t.getResponseBody()) {
                     os.write("Creator and services are required".getBytes(StandardCharsets.UTF_8));
@@ -282,8 +293,9 @@ public final class Server implements ServerConfig {
                   mapper.readValue(t.getRequestBody(), new TypeReference<List<Inhibition>>() {});
               Instant now = Instant.now();
               for (Inhibition i : inhibitionsToRecreate) {
-                // Only keep Inhibitions which haven't expired during downtime
-                if (i.expirationTime().isAfter(now)) {
+                // Only keep valid Inhibitions which haven't expired during downtime
+                if (validSubmission(i.creator(), i.environment(), i.services())
+                    && i.expirationTime().isAfter(now)) {
                   inhibitions.add(i);
                   knownEnvironments.add(i.environment());
                   knownServices.addAll(i.services());
@@ -390,5 +402,14 @@ public final class Server implements ServerConfig {
                     ? 1.0
                     : 0.0);
       }
+  }
+
+  private boolean validSubmission(String creator, String environment, Collection<String> services) {
+    return !(creator == null
+        || creator.isEmpty()
+        || environment == null
+        || environment.isEmpty()
+        || services == null
+        || services.isEmpty());
   }
 }
