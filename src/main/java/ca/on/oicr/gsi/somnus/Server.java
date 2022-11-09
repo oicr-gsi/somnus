@@ -193,7 +193,7 @@ public final class Server implements ServerConfig {
               try {
                 final CreateRequest query =
                     mapper.readValue(t.getRequestBody(), CreateRequest.class);
-                if (validSubmission(
+                if (!validSubmission(
                     query.getCreator(), query.getEnvironment(), query.getServices())) {
                   t.sendResponseHeaders(400, 0);
                   try (final OutputStream os = t.getResponseBody()) {
