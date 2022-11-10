@@ -29,7 +29,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.List;
@@ -289,7 +288,7 @@ public final class Server implements ServerConfig {
         t -> {
           if (t.getRequestMethod().equals("POST")) {
             try {
-              ArrayList<Inhibition> inhibitionsToRecreate =
+              List<Inhibition> inhibitionsToRecreate =
                   mapper.readValue(t.getRequestBody(), new TypeReference<List<Inhibition>>() {});
               Instant now = Instant.now();
               for (Inhibition i : inhibitionsToRecreate) {
