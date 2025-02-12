@@ -17,9 +17,9 @@ export default function(form, environments, services) {
   ttl.value = "1";
   const units = document.createElement("SELECT");
   for (const [name, multiplier] of [
-    ["days", 86400],
-    ["hours", 3600],
     ["minutes", 60],
+    ["hours", 3600],
+    ["days", 86400],
     ["seconds", 1]
   ]) {
     const option = document.createElement("OPTION");
@@ -27,7 +27,7 @@ export default function(form, environments, services) {
     option.value = multiplier;
     units.appendChild(option);
   }
-  units.selectedIndex = 1;
+  units.selectedIndex = 0;
   form.appendChild(document.createTextNode("Time-to-quiet: "));
   form.appendChild(ttl);
   form.appendChild(units);
