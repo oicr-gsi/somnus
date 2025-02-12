@@ -35,9 +35,15 @@ export default function(form, environments, services) {
     units.appendChild(option);
   }
   units.selectedIndex = 0;
+  units.addEventListener("input", calculateWarning);
+  ttl.addEventListener("input", calculateWarning);
   form.appendChild(document.createTextNode("Time-to-quiet: "));
   form.appendChild(ttl);
   form.appendChild(units);
+  var warning = document.createElement("span");
+  warning.setAttribute("id", "warning");
+  warning.setAttribute("style", "color:red;font-weight:bold")
+  form.appendChild(warning);
   form.appendChild(document.createElement("BR"));
 
   const environment = document.createElement("SELECT");
@@ -123,6 +129,22 @@ export default function(form, environments, services) {
       })
       .catch(error => alert(error));
   });
+
+  function calculateWarning(){
+    var ttlValue = ttl.valueAsNumber * TTL_LOOKUP[units.value];
+    var warning = document.getElementById("warning");
+
+    // Warn for very small inhibitions
+    if (ttlValue < 60){
+      warning.innerHTML = "Inhibition will be less than 1 minute; did you mean to choose a different unit?";
+
+    // Warn for very large inhibitions (>= 20h)
+    } else if (ttlValue >= 72000) {
+      warning.innerHTML = "Inhibition will be over 20 hours; did you mean to choose a different unit?";
+    } else {
+      warning.innerHTML = "";
+    }
+  };
 }
 
 export function wake(id) {
@@ -146,3 +168,4 @@ export function wake(id) {
     })
     .catch(error => alert(error));
 }
+
