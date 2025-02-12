@@ -103,7 +103,7 @@ export default function(form, environments, services) {
     }
 
     if(units.value === "hours" || units.value === "days" || units.value === "seconds"){
-      var sanityCheck = prompt("Please confirm the units you selected.");
+      var sanityCheck = prompt("Please confirm the units you selected. (seconds, minutes, hours, days)");
       if (sanityCheck !== units.value){
         alert("Please double-check your inhibition time units.")
         return;
