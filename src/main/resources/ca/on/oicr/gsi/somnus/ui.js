@@ -1,4 +1,11 @@
 export default function(form, environments, services) {
+  const TTL_LOOKUP = {
+    "minutes": 60,
+    "hours": 3600,
+    "days": 86400,
+    "seconds": 1
+  }
+
   const name = document.createElement("INPUT");
   name.type = "text";
   name.value = window.localStorage.getItem("creator");
@@ -16,15 +23,15 @@ export default function(form, environments, services) {
   ttl.type = "number";
   ttl.value = "1";
   const units = document.createElement("SELECT");
-  for (const [name, multiplier] of [
-    ["minutes", 60],
-    ["hours", 3600],
-    ["days", 86400],
-    ["seconds", 1]
+  for (const [name, value] of [
+    ["minutes", "minutes"],
+    ["hours", "hours"],
+    ["days", "days"],
+    ["seconds", "seconds"]
   ]) {
     const option = document.createElement("OPTION");
     option.text = name;
-    option.value = multiplier;
+    option.value = value;
     units.appendChild(option);
   }
   units.selectedIndex = 0;
@@ -76,7 +83,7 @@ export default function(form, environments, services) {
         .filter(([name, checkbox]) => checkbox.checked)
         .map(([name, checkbox]) => name)
         .concat(custom.value.split(/\s+/).filter(x => !!x)),
-      ttl: ttl.valueAsNumber * parseInt(units.value)
+      ttl: ttl.valueAsNumber * TTL_LOOKUP[units.value]
     };
     if (
       !request.creator ||
@@ -87,6 +94,14 @@ export default function(form, environments, services) {
     ) {
       alert("Invalid input");
       return;
+    }
+
+    if(units.value === "hours" || units.value === "days" || units.value === "seconds"){
+      var sanityCheck = prompt("Please confirm the units you selected.");
+      if (sanityCheck !== units.value){
+        alert("Please double-check your inhibition time units.")
+        return;
+      }
     }
     window.localStorage.setItem("creator", request.creator);
     window.localStorage.setItem("environment", request.environment);
