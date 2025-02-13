@@ -23,15 +23,10 @@ export default function(form, environments, services) {
   ttl.type = "number";
   ttl.value = "1";
   const units = document.createElement("SELECT");
-  for (const [name, value] of [
-    ["minutes", "minutes"],
-    ["hours", "hours"],
-    ["days", "days"],
-    ["seconds", "seconds"]
-  ]) {
+  for (const name in TTL_LOOKUP) {
     const option = document.createElement("OPTION");
     option.text = name;
-    option.value = value;
+    option.value = name;
     units.appendChild(option);
   }
   units.selectedIndex = 0;
