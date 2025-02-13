@@ -35,7 +35,7 @@ export default function(form, environments, services) {
   form.appendChild(document.createTextNode("Time-to-quiet: "));
   form.appendChild(ttl);
   form.appendChild(units);
-  var warning = document.createElement("span");
+  const warning = document.createElement("span");
   warning.setAttribute("id", "warning");
   warning.setAttribute("style", "color:red;font-weight:bold")
   form.appendChild(warning);
@@ -98,7 +98,7 @@ export default function(form, environments, services) {
     }
 
     if(units.value === "hours" || units.value === "days" || units.value === "seconds"){
-      var sanityCheck = prompt("Please confirm the units you selected. (seconds, minutes, hours, days)");
+      const sanityCheck = prompt("Please confirm the units you selected. (seconds, minutes, hours, days)");
       if (sanityCheck !== units.value){
         alert("Please double-check your inhibition time units.")
         return;
@@ -126,8 +126,8 @@ export default function(form, environments, services) {
   });
 
   function calculateWarning(){
-    var ttlValue = ttl.valueAsNumber * TTL_LOOKUP[units.value];
-    var warning = document.getElementById("warning");
+    const ttlValue = ttl.valueAsNumber * TTL_LOOKUP[units.value];
+    const warning = document.getElementById("warning");
 
     // Warn for very small inhibitions
     if (ttlValue < 60){
