@@ -8,12 +8,6 @@ import ca.on.oicr.gsi.status.NavigationMenu;
 import ca.on.oicr.gsi.status.SectionRenderer;
 import ca.on.oicr.gsi.status.ServerConfig;
 import ca.on.oicr.gsi.status.StatusPage;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import io.prometheus.client.CollectorRegistry;
@@ -44,6 +38,12 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 @SuppressWarnings("restriction")
 public final class Server implements ServerConfig {
@@ -76,11 +76,10 @@ public final class Server implements ServerConfig {
   private final Set<String> knownEnvironments = ConcurrentHashMap.newKeySet();
   private final Set<String> knownServices = ConcurrentHashMap.newKeySet();
   private Instant lastUpdate;
-  private final ObjectMapper mapper = new ObjectMapper();
+  private final ObjectMapper mapper = new JsonMapper();
   private final HttpServer server;
 
   public Server(int port) throws IOException {
-    mapper.registerModule(new JavaTimeModule());
     server = HttpServer.create(new InetSocketAddress(port), 0);
     add(
         "/",
@@ -155,7 +154,7 @@ public final class Server implements ServerConfig {
                               "import form from './ui.js'; form(document.getElementById('form'), %s, %s);",
                               mapper.writeValueAsString(knownEnvironments),
                               mapper.writeValueAsString(knownServices))));
-                } catch (JsonProcessingException e) {
+                } catch (JacksonException e) {
                   e.printStackTrace();
                   return Stream.of(
                       Header.jsModule(
