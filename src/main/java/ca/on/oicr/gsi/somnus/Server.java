@@ -23,11 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Instant;
-import java.util.Collection;
-import java.util.Deque;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.Executors;
@@ -76,7 +72,7 @@ public final class Server implements ServerConfig {
   private final Set<String> knownEnvironments = ConcurrentHashMap.newKeySet();
   private final Set<String> knownServices = ConcurrentHashMap.newKeySet();
   private Instant lastUpdate;
-  private final ObjectMapper mapper = new JsonMapper();
+  private final ObjectMapper mapper = JsonMapper.builder().build();
   private final HttpServer server;
 
   public Server(int port) throws IOException {
